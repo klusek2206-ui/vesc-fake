@@ -1,6 +1,6 @@
 {
   "short_name": "VESC Dash",
-  "name": "VESC Dashboard Fake",
+  "name": "VESC Telemetry Dashboard",
   "icons": [
     {
       "src": "icon-192.png",

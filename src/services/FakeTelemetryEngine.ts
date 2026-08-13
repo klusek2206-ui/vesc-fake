@@ -1,80 +1,51 @@
-import { TelemetryData, Settings } from '../types/vesc';
-import { StorageService } from './StorageService';
+import { TelemetryData, Profile, AppSettings } from '../types/vesc';
 
 export class FakeTelemetryEngine {
-  private tempEsc: number = 28.5;
-  private tempMotor: number = 29.0;
-  private batteryPercent: number = 98.4;
-  private uptime: number = 0;
-  private prevSpeed: number = 0;
+  private currentSpeedKmH = 0;
+  private odo = 124.5;
+  private tripDist = 12.3;
+  private uptime = 1450;
+  private battery = 84;
 
-  public update(gpsSpeedKmH: number, deltaSec: number, settings: Settings): TelemetryData {
-    this.uptime += deltaSec;
+  public update(rawGpsSpeedKmH: number, activeProfile: Profile, settings: AppSettings): TelemetryData {
+    this.uptime += 0.2;
 
-    // PRĘDKOŚĆ = GPS + OFFSET (+20 km/h)
-    const displaySpeed = Math.round(gpsSpeedKmH + settings.speedOffset);
+    let targetSpeed = rawGpsSpeedKmH * activeProfile.multiplier;
+    if (activeProfile.isLegalMode && targetSpeed > activeProfile.maxSpeedLimitKm) {
+      targetSpeed = activeProfile.maxSpeedLimitKm;
+    }
 
-    // Przyspieszenie (zmiana prędkości)
-    const accel = (displaySpeed - this.prevSpeed) / Math.max(deltaSec, 0.1);
-    this.prevSpeed = displaySpeed;
+    this.currentSpeedKmH += (targetSpeed - this.currentSpeedKmH) * 0.3;
+    const speed = Math.round(this.currentSpeedKmH * 10) / 10;
 
-    // 1. DUTY CYCLE % (rośnie wraz z prędkością, od ~18% przy 20km/h do ~85% przy 70km/h)
-    const baseDuty = (displaySpeed / 85) * 100;
-    const dutyNoise = (Math.random() - 0.5) * 0.8;
-    const duty = Math.min(100, Math.max(0, baseDuty + dutyNoise));
+    const currentA = speed > 0 ? Math.min(settings.maxCurrentA, Math.round((speed * 0.8 + Math.random() * 2) * 10) / 10) : 0;
+    const powerW = Math.round(currentA * settings.batteryVolts);
+    const dutyPct = Math.min(95, Math.round((speed / 65) * 100));
 
-    // 2. CURRENT (A)
-    // Prąd zależny od kwadratu prędkości (opór powietrza) + skok przy przyspieszaniu
-    let targetCurrent = Math.pow(displaySpeed / 12, 1.85) + Math.max(0, accel * 3.5);
-    if (displaySpeed < 2) targetCurrent = 0;
-    
-    // Subtelne, naturalne wahania prądu (mikronoise)
-    const currentNoise = (Math.random() - 0.5) * 0.6;
-    const current = Math.min(60, Math.max(0, targetCurrent + currentNoise));
+    const distanceStep = (speed / 3600) * 0.2;
+    this.odo += distanceStep;
+    this.tripDist += distanceStep;
 
-    // 3. VOLTAGE & POWER (W)
-    const batterySag = current * 0.04;
-    const voltage = Math.max(42, settings.nominalVoltage - batterySag);
-    const power = current * voltage;
+    const tempEscVal = Math.round(32 + speed * 0.25);
+    const tempMotorVal = Math.round(35 + speed * 0.35);
 
-    // 4. TEMPERATURA MOTOR & ESC (Bezwładność cieplna)
-    const ambientTemp = 25.0;
-    const escHeatingRate = (current * current * 0.00008) - ((this.tempEsc - ambientTemp) * 0.0015);
-    const motorHeatingRate = (current * current * 0.00012) - ((this.tempMotor - ambientTemp) * 0.0010);
-
-    this.tempEsc = Math.max(ambientTemp, this.tempEsc + escHeatingRate * deltaSec);
-    this.tempMotor = Math.max(ambientTemp, this.tempMotor + motorHeatingRate * deltaSec);
-
-    // 5. CONSUMPTION (Wh/km)
-    let currentWhKm = displaySpeed > 3 ? (power / displaySpeed) : 0;
-    if (currentWhKm > 99) currentWhKm = 99;
-    const avgWhKm = displaySpeed > 5 ? Math.min(60, Math.max(12, 18 + displaySpeed * 0.35)) : 0;
-
-    // 6. BATTERY DEPLETION
-    const energyUsedWh = (power * (deltaSec / 3600));
-    const percentDrain = (energyUsedWh / settings.batteryCapacityWh) * 100;
-    this.batteryPercent = Math.max(0, this.batteryPercent - percentDrain);
-
-    // 7. RANGE ESTIMATION
-    const remainingWh = (this.batteryPercent / 100) * settings.batteryCapacityWh;
-    const rangeKm = avgWhKm > 0 ? remainingWh / avgWhKm : 999;
+    const consumpt = speed > 2 ? Math.round(15 + Math.random() * 4) : 0;
 
     return {
-      gpsSpeed: Math.round(gpsSpeedKmH),
-      displaySpeed,
-      current: parseFloat(current.toFixed(1)),
-      power: Math.round(power),
-      duty: Math.round(duty),
-      tempEsc: Math.round(this.tempEsc),
-      tempMotor: Math.round(this.tempMotor),
-      consumption: Math.round(currentWhKm),
-      consumptionAvg: Math.round(avgWhKm),
-      batteryPercent: parseFloat(this.batteryPercent.toFixed(1)),
-      batteryRangeKm: rangeKm > 200 ? Infinity : Math.round(rangeKm),
-      odometer: StorageService.getOdometer(),
-      trip: StorageService.getTrip(),
-      uptimeSeconds: Math.floor(this.uptime),
-      voltage: parseFloat(voltage.toFixed(1))
+      gpsSpeed: Math.round(rawGpsSpeedKmH * 10) / 10,
+      displaySpeed: Math.round(speed),
+      current: currentA,
+      power: powerW,
+      duty: dutyPct,
+      batteryPercent: this.battery,
+      batteryRangeKm: Math.round(this.battery * 0.45),
+      tempEsc: tempEscVal,
+      tempMotor: tempMotorVal,
+      consumption: consumpt,
+      consumptionAvg: 18.2,
+      odometer: Math.round(this.odo * 10) / 10,
+      trip: Math.round(this.tripDist * 10) / 10,
+      uptimeSeconds: Math.floor(this.uptime)
     };
   }
 }

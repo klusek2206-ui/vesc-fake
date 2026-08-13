@@ -15,14 +15,13 @@ export const RealtimeDataPage: React.FC<RealtimeDataPageProps> = ({ data, onOpen
       
       {/* GÓRNY RZĄD: CURRENT | POWER | DUTY */}
       <div className="w-full flex justify-between items-center gap-1 max-w-sm mt-1">
-        {/* CURRENT */}
         <AnalogGauge
           title="CURRENT"
           value={data.current}
           unit="A"
           min={-60}
           max={60}
-          majorTicks={[-60, -50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 60]}
+          majorTicks={[-60, -40, -20, 0, 20, 40, 60]}
           subTicksCount={1}
           needleAngleStart={135}
           needleAngleEnd={405}
@@ -30,28 +29,26 @@ export const RealtimeDataPage: React.FC<RealtimeDataPageProps> = ({ data, onOpen
           size={112}
         />
 
-        {/* POWER */}
         <AnalogGauge
           title="POWER"
           value={data.power}
           unit="W"
           min={-10000}
           max={10000}
-          majorTicks={[-10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10]}
+          majorTicks={[-10, -5, 0, 5, 10]}
           needleAngleStart={135}
           needleAngleEnd={405}
           needleColor="#00a3ff"
           size={120}
         />
 
-        {/* DUTY */}
         <AnalogGauge
           title="DUTY"
           value={data.duty}
           unit="%"
           min={-100}
           max={100}
-          majorTicks={[-100, -75, -50, -25, 0, 25, 50, 75, 100]}
+          majorTicks={[-100, -50, 0, 50, 100]}
           needleAngleStart={135}
           needleAngleEnd={405}
           needleColor="#8a2be2"
@@ -59,10 +56,8 @@ export const RealtimeDataPage: React.FC<RealtimeDataPageProps> = ({ data, onOpen
         />
       </div>
 
-      {/* ŚRODKOWA SEKCJA: SPEEDOMETER + OVERLAPPING BATTERY */}
+      {/* ŚRODKOWA SEKCJA: SPEEDOMETER + BATTERY */}
       <div className="relative w-full max-w-sm flex justify-center items-center my-1">
-        
-        {/* GLÓWNY DUŻY PREDKOŚCIOMIERZ (SPEED) */}
         <div className="relative flex items-center justify-center">
           <AnalogGauge
             title="SPEED"
@@ -78,12 +73,10 @@ export const RealtimeDataPage: React.FC<RealtimeDataPageProps> = ({ data, onOpen
             size={220}
           />
 
-          {/* LOGO VESC W ZEGARZE PRĘDKOŚCI */}
           <div className="absolute top-10 right-10 opacity-40 pointer-events-none">
             <span className="text-white font-black italic tracking-tighter text-xs">|||VESC®</span>
           </div>
 
-          {/* PRZYCISK SETTINGS PRZY ZEGARZE */}
           <button
             onClick={onOpenSettings}
             className="absolute bottom-5 left-4 p-2 bg-[#222327] border border-[#3a3b40] rounded-full text-[#a2a2a8] hover:text-white shadow-md active:scale-95"
@@ -92,7 +85,6 @@ export const RealtimeDataPage: React.FC<RealtimeDataPageProps> = ({ data, onOpen
           </button>
         </div>
 
-        {/* REJESTR BATERII */}
         <div className="absolute right-[-6px] top-[18px]">
           <AnalogGauge
             title="BATTERY"
@@ -100,23 +92,19 @@ export const RealtimeDataPage: React.FC<RealtimeDataPageProps> = ({ data, onOpen
             unit="%"
             min={0}
             max={100}
-            majorTicks={[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
+            majorTicks={[0, 20, 40, 60, 80, 100]}
             subTicksCount={1}
             needleAngleStart={135}
             needleAngleEnd={385}
             needleColor="#ff3b30"
-            secondaryText={`${data.batteryRangeKm === Infinity ? '∞' : data.batteryRangeKm} KM RANGE`}
+            secondaryText={`${data.batteryRangeKm} KM RANGE`}
             size={135}
           />
-          <div className="text-center text-[10px] text-[#8e8e93] font-medium tracking-widest mt-[-10px]">
-            — {data.batteryPercent}% —
-          </div>
         </div>
       </div>
 
       {/* DOLNY RZĄD: TEMP ESC | CONSUMPT. | TEMP MOTOR */}
       <div className="w-full flex justify-between items-center gap-1 max-w-sm my-1">
-        {/* TEMP ESC */}
         <AnalogGauge
           title="TEMP ESC"
           value={data.tempEsc}
@@ -130,14 +118,13 @@ export const RealtimeDataPage: React.FC<RealtimeDataPageProps> = ({ data, onOpen
           size={110}
         />
 
-        {/* CONSUMPTION */}
         <AnalogGauge
           title="CONSUMPT."
           value={data.consumption}
           unit="WH/KM"
           min={-50}
           max={50}
-          majorTicks={[-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50]}
+          majorTicks={[-50, -25, 0, 25, 50]}
           needleAngleStart={135}
           needleAngleEnd={405}
           needleColor="#00a3ff"
@@ -146,7 +133,6 @@ export const RealtimeDataPage: React.FC<RealtimeDataPageProps> = ({ data, onOpen
           size={118}
         />
 
-        {/* TEMP MOTOR */}
         <AnalogGauge
           title="TEMP MOTOR"
           value={data.tempMotor}
@@ -161,7 +147,7 @@ export const RealtimeDataPage: React.FC<RealtimeDataPageProps> = ({ data, onOpen
         />
       </div>
 
-      {/* STATYSTYKI NA DOLE: ODOMETER | TRIP | UP-TIME */}
+      {/* STATYSTYKI NA DOLE */}
       <div className="w-full max-w-sm bg-[#16171a] border border-[#26272b] rounded-xl px-4 py-2 flex justify-between items-center text-center shadow-inner mb-1">
         <div>
           <div className="text-[9px] font-bold text-[#7c7c80] tracking-wider uppercase">ODOMETER</div>

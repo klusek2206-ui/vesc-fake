@@ -1,32 +1,44 @@
 import React from 'react';
 
 interface HeaderTabsProps {
-  activeTab: 'START' | 'RT DATA' | 'PROFILES';
-  onTabChange: (tab: 'START' | 'RT DATA' | 'PROFILES') => void;
+  activeTab: 'rt' | 'profiles' | 'start';
+  onSelectTab: (tab: 'rt' | 'profiles' | 'start') => void;
+  activeProfileName: string;
 }
 
-export const HeaderTabs: React.FC<HeaderTabsProps> = ({ activeTab, onTabChange }) => {
+export const HeaderTabs: React.FC<HeaderTabsProps> = ({ activeTab, onSelectTab, activeProfileName }) => {
   return (
-    <header className="w-full bg-[#121315] pt-safe px-4 border-b border-[#222326] flex flex-col justify-between select-none">
-      <div className="flex justify-between items-center h-12">
-        {(['START', 'RT DATA', 'PROFILES'] as const).map((tab) => {
-          const isActive = activeTab === tab;
-          return (
-            <button
-              key={tab}
-              onClick={() => onTabChange(tab)}
-              className={`relative flex-1 text-center font-bold text-sm tracking-wide transition-colors duration-150 ${
-                isActive ? 'text-[#00a3ff]' : 'text-[#7c7c80] hover:text-[#a2a2a8]'
-              }`}
-            >
-              {tab}
-              {isActive && (
-                <div className="absolute bottom-[-13px] left-0 right-0 h-[2.5px] bg-[#00a3ff] rounded-t shadow-[0_0_8px_#00a3ff]" />
-              )}
-            </button>
-          );
-        })}
+    <div className="w-full bg-[#18191c] border-b border-[#26272b] px-3 pt-2 pb-1 flex justify-between items-center select-none pt-safe">
+      <div className="flex items-center space-x-1">
+        <button
+          onClick={() => onSelectTab('start')}
+          className={`px-3 py-1 rounded-md text-xs font-bold tracking-wider transition ${
+            activeTab === 'start' ? 'bg-[#00a3ff] text-white shadow' : 'text-[#8e8e93] hover:text-white'
+          }`}
+        >
+          START
+        </button>
+        <button
+          onClick={() => onSelectTab('rt')}
+          className={`px-3 py-1 rounded-md text-xs font-bold tracking-wider transition ${
+            activeTab === 'rt' ? 'bg-[#00a3ff] text-white shadow' : 'text-[#8e8e93] hover:text-white'
+          }`}
+        >
+          RT DATA
+        </button>
+        <button
+          onClick={() => onSelectTab('profiles')}
+          className={`px-3 py-1 rounded-md text-xs font-bold tracking-wider transition ${
+            activeTab === 'profiles' ? 'bg-[#00a3ff] text-white shadow' : 'text-[#8e8e93] hover:text-white'
+          }`}
+        >
+          PROFILES
+        </button>
       </div>
-    </header>
+
+      <div className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-[#222327] border border-[#303136] text-[#00a3ff] truncate max-w-[120px]">
+        {activeProfileName}
+      </div>
+    </div>
   );
 };

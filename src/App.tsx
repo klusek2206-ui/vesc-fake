@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { FakeVESCService } from './services/FakeVESCService';
+import { TelemetryData, AppSettings } from './types/vesc';
 import { HeaderTabs } from './components/HeaderTabs';
 import { BottomBar } from './components/BottomBar';
 import { PWAInstallerBanner } from './components/PWAInstallerBanner';
@@ -6,95 +8,85 @@ import { StartPage } from './pages/StartPage';
 import { RealtimeDataPage } from './pages/RealtimeDataPage';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { SettingsModal } from './pages/SettingsModal';
-import { GPSService } from './services/GPSService';
-import { FakeTelemetryEngine } from './services/FakeTelemetryEngine';
-import { StorageService } from './services/StorageService';
-import { TelemetryData, Settings } from './types/vesc';
+
+const vescService = new FakeVESCService();
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<'START' | 'RT DATA' | 'PROFILES'>('START');
-  const [isConnected, setIsConnected] = useState<boolean>(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [settings, setSettings] = useState<Settings>(StorageService.getSettings());
-
-  // Stan telemetrii
+  const [activeTab, setActiveTab] = useState<'rt' | 'profiles' | 'start'>('start');
+  const [showSettings, setShowSettings] = useState(false);
   const [telemetry, setTelemetry] = useState<TelemetryData>({
     gpsSpeed: 0,
-    displaySpeed: 20,
+    displaySpeed: 0,
     current: 0,
     power: 0,
     duty: 0,
-    tempEsc: 28,
-    tempMotor: 29,
+    batteryPercent: 100,
+    batteryRangeKm: 45,
+    tempEsc: 30,
+    tempMotor: 30,
     consumption: 0,
     consumptionAvg: 0,
-    batteryPercent: 100,
-    batteryRangeKm: 999,
-    odometer: StorageService.getOdometer(),
-    trip: StorageService.getTrip(),
-    uptimeSeconds: 0,
-    voltage: 52.0
+    odometer: 0,
+    trip: 0,
+    uptimeSeconds: 0
   });
 
-  const gpsServiceRef = useRef<GPSService | null>(null);
-  const telemetryEngineRef = useRef<FakeTelemetryEngine>(new FakeTelemetryEngine());
-
   useEffect(() => {
-    // Inicjalizacja GPS z bezpośrednią aktualizacją Odometer & Trip
-    gpsServiceRef.current = new GPSService((deltaKm) => {
-      const newOdo = StorageService.getOdometer() + deltaKm;
-      const newTrip = StorageService.getTrip() + deltaKm;
-      StorageService.setOdometer(newOdo);
-      StorageService.setTrip(newTrip);
+    vescService.start((data) => {
+      setTelemetry(data);
     });
 
-    gpsServiceRef.current.start();
+    return () => vescService.stop();
+  }, []);
 
-    // Glówna pętla telemetrii (10Hz / co 100ms)
-    const interval = setInterval(() => {
-      const rawGpsSpeed = gpsServiceRef.current ? gpsServiceRef.current.getSmoothedSpeed() : 0;
-      const updatedData = telemetryEngineRef.current.update(rawGpsSpeed, 0.1, settings);
-      setTelemetry(updatedData);
-    }, 100);
+  const handleSelectProfile = (id: string) => {
+    vescService.setActiveProfile(id);
+  };
 
-    return () => {
-      clearInterval(interval);
-      gpsServiceRef.current?.stop();
-    };
-  }, [settings]);
-
-  const handleConnected = () => {
-    setIsConnected(true);
-    setActiveTab('RT DATA');
+  const handleSaveSettings = (newSettings: AppSettings) => {
+    vescService.updateSettings(newSettings);
   };
 
   return (
-    <div className="flex flex-col h-screen h-[100dvh] w-full bg-[#121315] text-white overflow-hidden justify-between">
-      {/* Nagłówek Zakładek */}
-      <HeaderTabs activeTab={activeTab} onTabChange={setActiveTab} />
-
-      {/* Główny Ekran w Zależności od Zakładki */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
-        {activeTab === 'START' && <StartPage onConnected={handleConnected} />}
-        {activeTab === 'RT DATA' && (
-          <RealtimeDataPage data={telemetry} onOpenSettings={() => setIsSettingsOpen(true)} />
-        )}
-        {activeTab === 'PROFILES' && <ProfilesPage />}
-      </main>
-
-      {/* Pasek Dolny */}
-      <BottomBar isConnected={isConnected} onOpenSettings={() => setIsSettingsOpen(true)} />
-
-      {/* Banner Instalacji PWA iOS */}
+    <div className="w-screen h-screen flex flex-col bg-[#121315] text-white overflow-hidden">
       <PWAInstallerBanner />
 
-      {/* Modal Ustawień */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={settings}
-        onSave={(newSet) => setSettings(newSet)}
+      <HeaderTabs
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        activeProfileName={vescService.activeProfile.name}
       />
+
+      {activeTab === 'start' && (
+        <StartPage
+          onStartClick={() => setActiveTab('rt')}
+          activeProfileName={vescService.activeProfile.name}
+        />
+      )}
+
+      {activeTab === 'rt' && (
+        <RealtimeDataPage
+          data={telemetry}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+      )}
+
+      {activeTab === 'profiles' && (
+        <ProfilesPage
+          profiles={vescService.profiles}
+          onSelectProfile={handleSelectProfile}
+        />
+      )}
+
+      <BottomBar activeTab={activeTab} onSelectTab={setActiveTab} />
+
+      {showSettings && (
+        <SettingsModal
+          settings={vescService.settings}
+          onSave={handleSaveSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </div>
   );
 }

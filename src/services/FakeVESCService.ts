@@ -1,24 +1,56 @@
-import { VescDevice } from '../types/vesc';
+import { TelemetryData, Profile, AppSettings } from '../types/vesc';
+import { StorageService } from './StorageService';
+import { GPSService } from './GPSService';
+import { FakeTelemetryEngine } from './FakeTelemetryEngine';
 
 export class FakeVESCService {
-  public static async scanForDevices(): Promise<VescDevice[]> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve([
-          { id: '1', name: 'VESC Scooter', signal: 'Excellent', rssi: -52 },
-          { id: '2', name: 'VESC Controller', signal: 'Good', rssi: -68 },
-          { id: '3', name: 'Electric Scooter', signal: 'Good', rssi: -72 },
-          { id: '4', name: 'VESC GT', signal: 'Medium', rssi: -84 }
-        ]);
-      }, 1800);
+  private gpsService: GPSService;
+  private engine: FakeTelemetryEngine;
+  private currentRawSpeed = 0;
+  private intervalId: number | null = null;
+
+  public settings: AppSettings;
+  public profiles: Profile[];
+  public activeProfile: Profile;
+
+  constructor() {
+    this.settings = StorageService.getSettings();
+    this.profiles = StorageService.getProfiles();
+    this.activeProfile = this.profiles.find((p) => p.active) || this.profiles[0];
+
+    this.engine = new FakeTelemetryEngine();
+    this.gpsService = new GPSService((speedKmH) => {
+      this.currentRawSpeed = speedKmH;
     });
   }
 
-  public static async connectDevice(_id: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve(true);
-      }, 1500);
-    });
+  public start(onTick: (data: TelemetryData) => void): void {
+    this.gpsService.start();
+    this.intervalId = window.setInterval(() => {
+      const data = this.engine.update(this.currentRawSpeed, this.activeProfile, this.settings);
+      onTick(data);
+    }, 200);
+  }
+
+  public stop(): void {
+    this.gpsService.stop();
+    if (this.intervalId !== null) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+  }
+
+  public setActiveProfile(profileId: string): void {
+    this.profiles = this.profiles.map((p) => ({
+      ...p,
+      active: p.id === profileId
+    }));
+    this.activeProfile = this.profiles.find((p) => p.id === profileId) || this.profiles[0];
+    StorageService.saveProfiles(this.profiles);
+  }
+
+  public updateSettings(newSettings: AppSettings): void {
+    this.settings = newSettings;
+    StorageService.saveSettings(newSettings);
   }
 }

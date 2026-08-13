@@ -2,27 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  html, body {
-    background-color: #121315;
-    color: #e1e1e3;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    overflow: hidden;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
-    touch-action: manipulation;
-    height: 100vh;
-    height: 100dvh;
-    margin: 0;
-    padding: 0;
-  }
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #121315;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Safe Area Insets dla iPhone / Dynamic Island */
-.pt-safe {
-  padding-top: max(env(safe-area-inset-top), 8px);
-}
-.pb-safe {
-  padding-bottom: max(env(safe-area-inset-bottom), 8px);
+@supports (padding-top: env(safe-area-inset-top)) {
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }

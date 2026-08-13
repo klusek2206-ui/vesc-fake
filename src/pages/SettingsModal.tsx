@@ -1,104 +1,75 @@
 import React, { useState } from 'react';
-import { Settings } from '../types/vesc';
-import { StorageService } from '../services/StorageService';
-import { X, RotateCcw } from 'lucide-react';
+import { AppSettings } from '../types/vesc';
+import { X } from 'lucide-react';
 
 interface SettingsModalProps {
-  isOpen: boolean;
+  settings: AppSettings;
+  onSave: (settings: AppSettings) => void;
   onClose: () => void;
-  settings: Settings;
-  onSave: (newSettings: Settings) => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave }) => {
-  const [speedOffset, setSpeedOffset] = useState(settings.speedOffset);
-
-  if (!isOpen) return null;
-
-  const handleSave = () => {
-    const updated = { ...settings, speedOffset };
-    StorageService.saveSettings(updated);
-    onSave(updated);
-    onClose();
-  };
-
-  const handleResetTrip = () => {
-    StorageService.resetTrip();
-    alert('TRIP meter has been reset.');
-  };
-
-  const handleResetOdo = () => {
-    if (confirm('Are you sure you want to reset ODOMETER?')) {
-      StorageService.resetOdometer();
-      alert('ODOMETER has been reset.');
-    }
-  };
+export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, onClose }) => {
+  const [form, setForm] = useState<AppSettings>({ ...settings });
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#18191c] border border-[#2e2f35] rounded-2xl w-full max-w-sm p-5 text-white shadow-2xl flex flex-col gap-4">
-        
-        <div className="flex justify-between items-center border-b border-[#28292e] pb-3">
-          <h3 className="font-bold text-base">SETTINGS & CONFIGURATION</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-white">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 select-none">
+      <div className="bg-[#18191c] border border-[#2a2b30] w-full max-w-sm rounded-2xl p-5 shadow-2xl">
+        <div className="flex justify-between items-center mb-4 border-b border-[#2a2b30] pb-3">
+          <h3 className="text-sm font-bold tracking-wider text-white uppercase">USTAWIENIA POJAZDU</h3>
+          <button onClick={onClose} className="text-[#8e8e93] hover:text-white">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* SPEED OFFSET */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold text-[#8e8e93]">
-            SPEED OFFSET (+KM/H ADDED TO REAL GPS): <strong className="text-[#00a3ff]">+{speedOffset} km/h</strong>
-          </label>
-          <div className="flex gap-2">
-            {[10, 15, 20, 25, 30].map((val) => (
-              <button
-                key={val}
-                onClick={() => setSpeedOffset(val)}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold border ${
-                  speedOffset === val
-                    ? 'bg-[#00a3ff] border-[#00a3ff] text-white'
-                    : 'bg-[#222328] border-[#323338] text-[#a2a2a8]'
-                }`}
-              >
-                +{val}
-              </button>
-            ))}
+        <div className="space-y-4 text-xs">
+          <div>
+            <label className="block text-[#8e8e93] mb-1">Średnica koła (mm)</label>
+            <input
+              type="number"
+              value={form.wheelDiameterMm}
+              onChange={(e) => setForm({ ...form, wheelDiameterMm: Number(e.target.value) })}
+              className="w-full bg-[#121315] border border-[#2c2d33] rounded-lg p-2.5 text-white font-mono focus:border-[#00a3ff] outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[#8e8e93] mb-1">Napięcie baterii (V)</label>
+            <input
+              type="number"
+              value={form.batteryVolts}
+              onChange={(e) => setForm({ ...form, batteryVolts: Number(e.target.value) })}
+              className="w-full bg-[#121315] border border-[#2c2d33] rounded-lg p-2.5 text-white font-mono focus:border-[#00a3ff] outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[#8e8e93] mb-1">Maksymalny prąd (A)</label>
+            <input
+              type="number"
+              value={form.maxCurrentA}
+              onChange={(e) => setForm({ ...form, maxCurrentA: Number(e.target.value) })}
+              className="w-full bg-[#121315] border border-[#2c2d33] rounded-lg p-2.5 text-white font-mono focus:border-[#00a3ff] outline-none"
+            />
           </div>
         </div>
 
-        {/* RESETY DATA */}
-        <div className="flex flex-col gap-2 pt-2 border-t border-[#28292e]">
-          <span className="text-xs font-semibold text-[#8e8e93]">DATA MANAGEMENT</span>
-          <div className="flex gap-2">
-            <button
-              onClick={handleResetTrip}
-              className="flex-1 py-2 bg-[#26272c] border border-[#383940] rounded-xl text-xs font-semibold flex items-center justify-center gap-1 hover:bg-[#2e2f36]"
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> Reset Trip
-            </button>
-            <button
-              onClick={handleResetOdo}
-              className="flex-1 py-2 bg-[#26272c] border border-[#383940] rounded-xl text-xs font-semibold text-red-400 flex items-center justify-center gap-1 hover:bg-[#2e2f36]"
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> Reset Odo
-            </button>
-          </div>
+        <div className="mt-6 flex space-x-2">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 bg-[#222327] text-[#8e8e93] font-bold rounded-xl"
+          >
+            ANULUJ
+          </button>
+          <button
+            onClick={() => {
+              onSave(form);
+              onClose();
+            }}
+            className="flex-1 py-2.5 bg-[#00a3ff] text-white font-bold rounded-xl shadow-lg"
+          >
+            ZAPISZ
+          </button>
         </div>
-
-        {/* INFO PWA */}
-        <div className="text-[11px] text-[#7c7c80] bg-[#121315] p-3 rounded-xl border border-[#222326]">
-          <div>Version: <strong>1.0.0 (PWA)</strong></div>
-          <div>GPS Status: <strong className="text-[#00e676]">Active (Smoothed)</strong></div>
-          <div>Target Platform: <strong>iOS Safari / Standalone PWA</strong></div>
-        </div>
-
-        <button
-          onClick={handleSave}
-          className="w-full py-3 bg-[#00a3ff] font-bold text-sm rounded-xl text-white shadow-lg active:scale-95 transition-transform mt-1"
-        >
-          SAVE CHANGES
-        </button>
       </div>
     </div>
   );
