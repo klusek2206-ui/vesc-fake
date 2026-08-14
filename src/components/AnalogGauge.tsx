@@ -6,14 +6,12 @@ interface GaugeProps {
   value: number;
   min: number;
   max: number;
-  startAngle: number;
-  endAngle: number;
+  startAngle?: number;
+  endAngle?: number;
   needleColor?: string;
-  subValue?: string;
-  subLabel?: string;
-  ticksCount?: number;
+  labels?: string[];
   className?: string;
-  centerTextOverride?: React.ReactNode;
+  centerOverride?: React.ReactNode;
 }
 
 export const AnalogGauge: React.FC<GaugeProps> = ({
@@ -22,29 +20,28 @@ export const AnalogGauge: React.FC<GaugeProps> = ({
   value,
   min,
   max,
-  startAngle,
-  endAngle,
+  startAngle = 135,
+  endAngle = 405,
   needleColor = '#00A8FF',
-  subValue,
-  subLabel,
-  ticksCount = 11,
+  labels = [],
   className = '',
-  centerTextOverride
+  centerOverride,
 }) => {
   const clampVal = Math.min(Math.max(value, min), max);
   const pct = (clampVal - min) / (max - min);
   const currentAngle = startAngle + pct * (endAngle - startAngle);
 
-  // Generowanie podziałek
+  // Kreski podziałki
+  const totalTicks = 41;
   const ticks = [];
-  for (let i = 0; i < ticksCount; i++) {
-    const tickPct = i / (ticksCount - 1);
-    const angle = startAngle + tickPct * (endAngle - startAngle);
+  for (let i = 0; i < totalTicks; i++) {
+    const tPct = i / (totalTicks - 1);
+    const angle = startAngle + tPct * (endAngle - startAngle);
     const rad = (angle * Math.PI) / 180;
-    
-    const isMajor = i % 2 === 0;
-    const innerR = isMajor ? 38 : 42;
-    const outerR = 46;
+
+    const isMajor = i % 4 === 0;
+    const innerR = isMajor ? 36 : 40;
+    const outerR = 45;
 
     const x1 = 50 + innerR * Math.cos(rad);
     const y1 = 50 + innerR * Math.sin(rad);
@@ -58,60 +55,68 @@ export const AnalogGauge: React.FC<GaugeProps> = ({
         y1={y1}
         x2={x2}
         y2={y2}
-        stroke="#888"
-        strokeWidth={isMajor ? 1.2 : 0.6}
+        stroke={isMajor ? '#AAA' : '#555'}
+        strokeWidth={isMajor ? '1.2' : '0.6'}
       />
     );
   }
 
-  // Wyliczenie pozycji wskazówki
+  // Wartości liczbowe przy kreśkach
+  const labelElements = [];
+  if (labels.length > 0) {
+    for (let i = 0; i < labels.length; i++) {
+      const lPct = i / (labels.length - 1);
+      const angle = startAngle + lPct * (endAngle - startAngle);
+      const rad = (angle * Math.PI) / 180;
+      const textR = 28;
+
+      const lx = 50 + textR * Math.cos(rad);
+      const ly = 50 + textR * Math.sin(rad) + 1.5;
+
+      labelElements.push(
+        <text
+          key={i}
+          x={lx}
+          y={ly}
+          fill="#888"
+          fontSize="4.5"
+          fontWeight="bold"
+          textAnchor="middle"
+          dominantBaseline="middle"
+        >
+          {labels[i]}
+        </text>
+      );
+    }
+  }
+
+  // Kąt wskazówki
   const needleRad = (currentAngle * Math.PI) / 180;
-  const needleX = 50 + 44 * Math.cos(needleRad);
-  const needleY = 50 + 44 * Math.sin(needleRad);
+  const nx = 50 + 43 * Math.cos(needleRad);
+  const ny = 50 + 43 * Math.sin(needleRad);
 
   return (
-    <div className={`relative aspect-square rounded-full bg-[#161616] border border-[#2A2A2A] shadow-2xl overflow-hidden select-none ${className}`}>
-      {/* Metaliczna ramka i refleks światła */}
-      <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
-      
+    <div className={`relative aspect-square rounded-full bg-[#1C1C1C] border border-[#333] shadow-lg select-none overflow-hidden ${className}`}>
       <svg viewBox="0 0 100 100" className="w-full h-full">
-        {/* Tarcza zegara */}
-        <circle cx="50" cy="50" r="48" fill="#141414" stroke="#222" strokeWidth="2" />
-        <circle cx="50" cy="50" r="46" fill="none" stroke="#2D2D2D" strokeWidth="0.5" />
-
-        {/* Podziałki */}
+        <circle cx="50" cy="50" r="48" fill="#141414" stroke="#262626" strokeWidth="2" />
         {ticks}
+        {labelElements}
 
-        {/* Wskazówka */}
-        <line
-          x1="50"
-          y1="50"
-          x2={needleX}
-          y2={needleY}
-          stroke={needleColor}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
-        
-        {/* Środek wskazówki */}
-        <circle cx="50" cy="50" r="3" fill="#000" stroke={needleColor} strokeWidth="1.5" />
+        {/* Trójkątny wskaźnik na brzegu (styl VESC) */}
+        <g transform={`rotate(${currentAngle}, 50, 50)`}>
+          <polygon points="50,6 47,13 53,13" fill={needleColor} />
+        </g>
       </svg>
 
-      {/* Tekst na środku tarczy */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center pt-2">
-        {centerTextOverride ? (
-          centerTextOverride
+      {/* Środek z wartością cyfrową */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none pt-1">
+        {centerOverride ? (
+          centerOverride
         ) : (
           <>
-            <span className="text-[9px] tracking-wider text-gray-400 font-bold uppercase">{title}</span>
-            <span className="text-xl font-extrabold text-white leading-none my-0.5">{value}</span>
-            {unit && <span className="text-[9px] text-gray-400 font-bold uppercase">{unit}</span>}
-            {subValue && (
-              <div className="mt-1 flex flex-col items-center">
-                <span className="text-xs font-bold text-white">{subValue}</span>
-                {subLabel && <span className="text-[7px] text-gray-400 uppercase">{subLabel}</span>}
-              </div>
-            )}
+            <span className="text-[8px] font-extrabold text-gray-400 tracking-wider uppercase">{title}</span>
+            <span className="text-lg font-black text-white leading-none my-0.5">{value}</span>
+            {unit && <span className="text-[8px] font-bold text-gray-400 uppercase">{unit}</span>}
           </>
         )}
       </div>
