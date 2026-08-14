@@ -1,18 +1,580 @@
 <!DOCTYPE html>
 <html lang="pl">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>VESC Dashboard</title>
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="VESC Dash" />
-    <meta name="theme-color" content="#121315" />
-    <link rel="manifest" href="./manifest.json" />
-    <link rel="apple-touch-icon" href="./icon-192.png" />
-  </head>
-  <body class="bg-[#121315] text-white overflow-hidden select-none">
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>VESC Real-Time Dashboard</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    #root {
+      width: 100%;
+      max-width: 440px;
+      min-height: 100vh;
+      background: #181818;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 0 30px rgba(0,0,0,0.8);
+    }
+    /* iOS Button Reset */
+    button {
+      appearance: none;
+      -webkit-appearance: none;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    function VescDashboard() {
+      const [activeTab, setActiveTab] = useState('RT DATA');
+      
+      // Telemetry state
+      const [speed, setSpeed] = useState(0);
+      const [current, setCurrent] = useState(0);
+      const [power, setPower] = useState(0);
+      const [duty, setDuty] = useState(0);
+      const [battery, setBattery] = useState(88); // Default 88% instead of 0%
+      const [tempEsc, setTempEsc] = useState(31);
+      const [tempMotor, setTempMotor] = useState(34);
+      const [consumption, setConsumption] = useState(0);
+      const [avgConsumption, setAvgConsumption] = useState(0);
+      
+      const [odometer, setOdometer] = useState(14.2);
+      const [trip, setTrip] = useState(3.5);
+      const [uptimeSec, setUptimeSec] = useState(252); // 00:04:12
+
+      // GPS state
+      const [gpsStatus, setGpsStatus] = useState('OFF'); // 'OFF', 'SEARCHING', 'ACTIVE', 'ERROR'
+      const [gpsMessage, setGpsMessage] = useState('Dotknij, aby włączyć GPS');
+      const [simulating, setSimulating] = useState(false);
+
+      const watchIdRef = useRef(null);
+      const lastPosRef = useRef(null);
+
+      // Range calculation (Battery % * 0.43 km/%)
+      const rangeKm = Math.round(battery * 0.43);
+
+      // Uptime counter
+      useEffect(() => {
+        const timer = setInterval(() => {
+          setUptimeSec(prev => prev + 1);
+        }, 1000);
+        return () => clearInterval(timer);
+      }, []);
+
+      // Format uptime HH:MM:SS
+      const formatUptime = (seconds) => {
+        const hrs = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+        return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      };
+
+      // Handle GPS activation
+      const startGPS = () => {
+        if (!navigator.geolocation) {
+          setGpsStatus('ERROR');
+          setGpsMessage('Brak obsługi GPS w przeglądarce');
+          return;
+        }
+
+        setGpsStatus('SEARCHING');
+        setGpsMessage('Szukam sygnału GPS...');
+        setSimulating(false);
+
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+        }
+
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          (pos) => {
+            setGpsStatus('ACTIVE');
+            setGpsMessage('GPS Aktywny');
+
+            let currentSpeed = 0;
+            if (pos.coords.speed !== null && !isNaN(pos.coords.speed) && pos.coords.speed >= 0) {
+              currentSpeed = Math.round(pos.coords.speed * 3.6); // m/s to km/h
+            } else if (lastPosRef.current) {
+              // Fallback distance calculation
+              const dt = (pos.timestamp - lastPosRef.current.timestamp) / 1000;
+              if (dt > 0.5) {
+                const dist = calculateDistance(
+                  lastPosRef.current.coords.latitude,
+                  lastPosRef.current.coords.longitude,
+                  pos.coords.latitude,
+                  pos.coords.longitude
+                );
+                currentSpeed = Math.round((dist / dt) * 3.6);
+              }
+            }
+            lastPosRef.current = pos;
+
+            currentSpeed = Math.min(Math.max(currentSpeed, 0), 75);
+            setSpeed(currentSpeed);
+
+            // Compute simulated proportional telemetry based on speed
+            if (currentSpeed > 0) {
+              const pwr = Math.round(currentSpeed * 28 + Math.random() * 20);
+              const curr = Math.round(pwr / 42);
+              const dty = Math.round((currentSpeed / 60) * 85);
+              setPower(pwr);
+              setCurrent(curr);
+              setDuty(dty);
+              setConsumption(Math.round(12 + currentSpeed * 0.4));
+              setTrip(prev => Number((prev + (currentSpeed / 3600)).toFixed(2)));
+              setOdometer(prev => Number((prev + (currentSpeed / 3600)).toFixed(2)));
+            } else {
+              setPower(0);
+              setCurrent(0);
+              setDuty(0);
+              setConsumption(0);
+            }
+          },
+          (err) => {
+            console.error(err);
+            setGpsStatus('ERROR');
+            if (err.code === 1) {
+              setGpsMessage('Brak zgody na GPS. Zezwól w ustawieniach.');
+            } else {
+              setGpsMessage('Błąd sygnału GPS (' + err.message + ')');
+            }
+          },
+          {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 15000
+          }
+        );
+      };
+
+      // Toggle Simulation Mode
+      const toggleSimulation = () => {
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
+        if (simulating) {
+          setSimulating(false);
+          setGpsStatus('OFF');
+          setGpsMessage('Dotknij, aby włączyć GPS');
+          setSpeed(0);
+          setPower(0);
+          setCurrent(0);
+          setDuty(0);
+        } else {
+          setSimulating(true);
+          setGpsStatus('ACTIVE');
+          setGpsMessage('Tryb Symulacji (Jazda testowa)');
+        }
+      };
+
+      // Simulation loop
+      useEffect(() => {
+        if (!simulating) return;
+        let simSpeed = 15;
+        let direction = 1;
+        const interval = setInterval(() => {
+          simSpeed += (Math.random() * 4 - 1.8) * direction;
+          if (simSpeed > 52) direction = -1;
+          if (simSpeed < 5) direction = 1;
+          
+          const roundedSpeed = Math.round(simSpeed);
+          const pwr = Math.round(roundedSpeed * 32 + (Math.random() * 40 - 20));
+          const curr = Math.round(pwr / 42);
+          const dty = Math.round((roundedSpeed / 60) * 80);
+
+          setSpeed(roundedSpeed);
+          setPower(pwr);
+          setCurrent(curr);
+          setDuty(dty);
+          setConsumption(Math.round(14 + roundedSpeed * 0.3));
+          setAvgConsumption(18);
+          setTrip(prev => Number((prev + 0.005).toFixed(2)));
+          setOdometer(prev => Number((prev + 0.005).toFixed(2)));
+        }, 800);
+        return () => clearInterval(interval);
+      }, [simulating]);
+
+      // Haversine distance in meters
+      const calculateDistance = (lat1, lon1, lat2, lon2) => {
+        const R = 6371000;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+      };
+
+      // Calculate polar needle tip
+      const getPolar = (cx, cy, r, angleDeg) => {
+        const rad = (angleDeg * Math.PI) / 180;
+        return {
+          x: cx + r * Math.cos(rad),
+          y: cy + r * Math.sin(rad)
+        };
+      };
+
+      // Render Wedge Pointer Indicator (Triangular pointer near tick rim)
+      const renderPointerWedge = (cx, cy, r, angleDeg, color = "#00a8ff") => {
+        const pt = getPolar(cx, cy, r, angleDeg);
+        const pLeft = getPolar(cx, cy, r - 8, angleDeg - 8);
+        const pRight = getPolar(cx, cy, r - 8, angleDeg + 8);
+        return (
+          <polygon
+            points={`${pt.x},${pt.y} ${pLeft.x},${pLeft.y} ${pRight.x},${pRight.y}`}
+            fill={color}
+            stroke="#ffffff"
+            strokeWidth="0.8"
+          />
+        );
+      };
+
+      // Ticks generator
+      const renderTicks = (cx, cy, rIn, rOut, rTxt, startA, endA, ticks) => {
+        const step = ticks.length > 1 ? (endA - startA) / (ticks.length - 1) : 0;
+        return ticks.map((label, i) => {
+          const a = startA + i * step;
+          const p1 = getPolar(cx, cy, rIn, a);
+          const p2 = getPolar(cx, cy, rOut, a);
+          const pt = getPolar(cx, cy, rTxt, a);
+          return (
+            <g key={i}>
+              <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#666" strokeWidth="1.2" />
+              {label !== '' && (
+                <text x={pt.x} y={pt.y + 3.5} fill="#aaa" fontSize="8" fontStyle="normal" fontWeight="600" textAnchor="middle">
+                  {label}
+                </text>
+              )}
+            </g>
+          );
+        });
+      };
+
+      // Mapping values to gauge angles
+      // CURRENT: -60 to +60 -> 100° to 260° (0 = 180°)
+      const currentAngle = 180 + (current / 60) * 80;
+
+      // POWER: -10k to +10k -> 150° to 390° (0 = 270°)
+      const powerAngle = 270 + (power / 10000) * 120;
+
+      // DUTY: -100 to +100 -> 100° to 260° (0 = 0° or 180°) -> let's map 0 to 0° (Right)
+      const dutyAngle = 0 + (duty / 100) * 80;
+
+      // SPEED: 0 to 60 km/h -> 35° to 305° (0 = 35°)
+      const speedAngle = 35 + (Math.min(speed, 65) / 60) * 270;
+
+      // BATTERY: 0% to 100% -> 320° (-40°) to 140°
+      const batteryAngle = 320 - (battery / 100) * 180;
+
+      // TEMP ESC: 0 to 100°C -> 140° to 40°
+      const tempEscAngle = 180 + (tempEsc / 100) * 120;
+
+      // CONSUMP: -50 to +50 -> 150° to 390° (0 = 270°)
+      const consumpAngle = 270 + (consumption / 50) * 120;
+
+      // TEMP MOTOR: 0 to 100°C -> 180° to 300°
+      const tempMotorAngle = 180 + (tempMotor / 100) * 120;
+
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#121212', color: '#fff', overflow: 'hidden' }}>
+          
+          {/* TOP NAVIGATION TABS */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-around',
+            alignItems: 'center',
+            background: '#1c1c1e',
+            paddingTop: '12px',
+            paddingBottom: '8px',
+            borderBottom: '1px solid #2c2c2e'
+          }}>
+            {['START', 'RT DATA', 'PROFILES'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  background: 'transparent',
+                  border: 'none',
+                  color: activeTab === tab ? '#00a8ff' : '#8e8e93',
+                  fontSize: '14px',
+                  fontWeight: '700',
+                  letterSpacing: '1px',
+                  padding: '6px 16px',
+                  borderBottom: activeTab === tab ? '3px solid #00a8ff' : '3px solid transparent',
+                  transition: 'all 0.2s ease',
+                  cursor: 'pointer'
+                }}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* GPS & SIMULATION CONTROL BANNER */}
+          <div style={{
+            background: gpsStatus === 'ACTIVE' ? '#0d2818' : gpsStatus === 'SEARCHING' ? '#2d2006' : '#221515',
+            borderBottom: '1px solid #333',
+            padding: '8px 12px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: gpsStatus === 'ACTIVE' ? '#2ecc71' : gpsStatus === 'SEARCHING' ? '#f1c40f' : '#e74c3c',
+                display: 'inline-block',
+                boxShadow: gpsStatus === 'ACTIVE' ? '0 0 8px #2ecc71' : 'none'
+              }}></span>
+              <span style={{ fontSize: '11px', fontWeight: '600', color: '#e0e0e0' }}>
+                {gpsMessage}
+              </span>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                onClick={startGPS}
+                style={{
+                  background: '#00a8ff',
+                  color: '#fff',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                {gpsStatus === 'ACTIVE' ? 'ODŚWIEŻ GPS' : '📍 WŁĄCZ GPS'}
+              </button>
+              
+              <button
+                onClick={toggleSimulation}
+                style={{
+                  background: simulating ? '#e74c3c' : '#34495e',
+                  color: '#fff',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                {simulating ? 'STOP SYM' : '🎮 SYMULACJA'}
+              </button>
+            </div>
+          </div>
+
+          {/* MAIN VESC DISPLAY CANVAS (SVG) */}
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '4px' }}>
+            <svg viewBox="0 0 380 580" style={{ width: '100%', height: '100%', maxHeight: 'calc(100vh - 120px)' }}>
+              <defs>
+                <radialGradient id="dialGrad" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#252528" />
+                  <stop offset="85%" stopColor="#18181a" />
+                  <stop offset="100%" stopColor="#111113" />
+                </radialGradient>
+                <radialGradient id="centerGrad" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#2e2e32" />
+                  <stop offset="100%" stopColor="#1a1a1c" />
+                </radialGradient>
+                <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#000000" floodOpacity="0.6" />
+                </filter>
+              </defs>
+
+              {/* ==================== TOP ROW GAUGES ==================== */}
+
+              {/* 1. CURRENT (LEFT) */}
+              <g filter="url(#shadow)">
+                <circle cx="75" cy="75" r="58" fill="url(#dialGrad)" stroke="#333" strokeWidth="1.5" />
+                <text x="75" y="48" fill="#888" fontSize="8" fontWeight="bold" textAnchor="middle">CURRENT</text>
+                <text x="75" y="76" fill="#ffffff" fontSize="22" fontWeight="bold" textAnchor="middle">{current}</text>
+                <text x="75" y="94" fill="#888" fontSize="10" fontWeight="bold" textAnchor="middle">A</text>
+                {renderTicks(75, 75, 50, 56, 42, 100, 260, ['-60','-40','-20','0','20','40','60'])}
+                {renderPointerWedge(75, 75, 56, currentAngle, "#f1c40f")}
+              </g>
+
+              {/* 3. DUTY (RIGHT) */}
+              <g filter="url(#shadow)">
+                <circle cx="305" cy="75" r="58" fill="url(#dialGrad)" stroke="#333" strokeWidth="1.5" />
+                <text x="305" y="48" fill="#888" fontSize="8" fontWeight="bold" textAnchor="middle">DUTY</text>
+                <text x="305" y="76" fill="#ffffff" fontSize="22" fontWeight="bold" textAnchor="middle">{duty}</text>
+                <text x="305" y="94" fill="#888" fontSize="10" fontWeight="bold" textAnchor="middle">%</text>
+                {renderTicks(305, 75, 50, 56, 42, 280, 440, ['-100','-50','0','50','100'])}
+                {renderPointerWedge(305, 75, 56, dutyAngle, "#9b59b6")}
+              </g>
+
+              {/* 2. POWER (CENTER - OVERLAPS LEFT & RIGHT) */}
+              <g filter="url(#shadow)">
+                <circle cx="190" cy="70" r="68" fill="url(#dialGrad)" stroke="#444" strokeWidth="2" />
+                <text x="190" y="38" fill="#aaa" fontSize="9" fontWeight="bold" textAnchor="middle">POWER</text>
+                <text x="190" y="72" fill="#ffffff" fontSize="28" fontWeight="bold" textAnchor="middle">{power}</text>
+                <text x="190" y="92" fill="#aaa" fontSize="11" fontWeight="bold" textAnchor="middle">W</text>
+                {renderTicks(190, 70, 58, 66, 48, 150, 390, ['-10k','-6k','-2k','0','2k','6k','10k'])}
+                {renderPointerWedge(190, 70, 66, powerAngle, "#00a8ff")}
+              </g>
+
+
+              {/* ==================== MIDDLE ROW GAUGES ==================== */}
+
+              {/* WATERMARK LOGO */}
+              <text x="325" y="185" fill="#3a3a3c" fontSize="18" fontWeight="900" fontStyle="italic" textAnchor="end">| VESC®</text>
+
+              {/* 4. MAIN SPEEDOMETER (LEFT CENTER - HUGE) */}
+              <g filter="url(#shadow)">
+                <circle cx="140" cy="265" r="110" fill="url(#dialGrad)" stroke="#444" strokeWidth="2.5" />
+                <circle cx="140" cy="265" r="92" fill="none" stroke="#252528" strokeWidth="1" />
+                
+                <text x="140" y="210" fill="#aaaaaa" fontSize="12" fontWeight="bold" textAnchor="middle" letterSpacing="1.5">SPEED</text>
+                <text x="140" y="272" fill="#ffffff" fontSize="62" fontWeight="800" textAnchor="middle">{speed}</text>
+                <text x="140" y="302" fill="#aaaaaa" fontSize="12" fontWeight="bold" textAnchor="middle" letterSpacing="1">KM/H</text>
+
+                {/* Ticks for Speed 0 to 60 */}
+                {renderTicks(140, 265, 96, 107, 82, 35, 305, ['0', '10', '20', '30', '40', '50', '60'])}
+                
+                {/* Speed Pointer Wedge */}
+                {renderPointerWedge(140, 265, 107, speedAngle, "#00a8ff")}
+
+                {/* Settings Gear Icon Button inside Speed Dial */}
+                <g transform="translate(68, 320)" style={{ cursor: 'pointer' }} onClick={() => alert("Ustawienia VESC Tool")}>
+                  <circle cx="12" cy="12" r="12" fill="#2c2c2e" stroke="#555" strokeWidth="1" />
+                  <text x="12" y="16" fill="#aaa" fontSize="12" textAnchor="middle">⚙</text>
+                </g>
+              </g>
+
+              {/* 5. BATTERY GAUGE (RIGHT - OVERLAPS SPEED) */}
+              <g filter="url(#shadow)">
+                <circle cx="298" cy="265" r="66" fill="url(#dialGrad)" stroke="#444" strokeWidth="2" />
+                <text x="298" y="232" fill="#888" fontSize="8" fontWeight="bold" textAnchor="middle">BATTERY</text>
+                <text x="298" y="248" fill="#00a8ff" fontSize="11" fontWeight="bold" textAnchor="middle">
+                  {rangeKm} <tspan fill="#888" fontSize="8">KM RANGE</tspan>
+                </text>
+                <text x="298" y="280" fill="#ffffff" fontSize="26" fontWeight="bold" textAnchor="middle">{battery}%</text>
+                
+                {/* Scale bar at bottom */}
+                <line x1="268" y1="310" x2="328" y2="310" stroke="#444" strokeWidth="2" />
+                <text x="298" y="312" fill="#666" fontSize="7" textAnchor="middle">0%</text>
+
+                {/* Ticks for Battery */}
+                {renderTicks(298, 265, 54, 63, 44, 140, 320, ['100','75','50','25','0'])}
+                {renderPointerWedge(298, 265, 63, batteryAngle, "#e74c3c")}
+              </g>
+
+
+              {/* ==================== BOTTOM ROW GAUGES ==================== */}
+
+              {/* 6. TEMP ESC (LEFT) */}
+              <g filter="url(#shadow)">
+                <circle cx="75" cy="445" r="58" fill="url(#dialGrad)" stroke="#333" strokeWidth="1.5" />
+                <text x="75" y="418" fill="#888" fontSize="7" fontWeight="bold" textAnchor="middle">TEMP</text>
+                <text x="75" y="426" fill="#888" fontSize="7" fontWeight="bold" textAnchor="middle">ESC</text>
+                <text x="75" y="452" fill="#ffffff" fontSize="22" fontWeight="bold" textAnchor="middle">{tempEsc}</text>
+                <text x="75" y="468" fill="#888" fontSize="10" fontWeight="bold" textAnchor="middle">°C</text>
+                {renderTicks(75, 445, 48, 55, 40, 180, 300, ['0','20','40','60','80','100'])}
+                {renderPointerWedge(75, 445, 55, tempEscAngle, "#00a8ff")}
+              </g>
+
+              {/* 8. TEMP MOTOR (RIGHT) */}
+              <g filter="url(#shadow)">
+                <circle cx="305" cy="445" r="58" fill="url(#dialGrad)" stroke="#333" strokeWidth="1.5" />
+                <text x="305" y="418" fill="#888" fontSize="7" fontWeight="bold" textAnchor="middle">TEMP</text>
+                <text x="305" y="426" fill="#888" fontSize="7" fontWeight="bold" textAnchor="middle">MOTOR</text>
+                <text x="305" y="452" fill="#ffffff" fontSize="22" fontWeight="bold" textAnchor="middle">{tempMotor}</text>
+                <text x="305" y="468" fill="#888" fontSize="10" fontWeight="bold" textAnchor="middle">°C</text>
+                {renderTicks(305, 445, 48, 55, 40, 180, 300, ['0','20','40','60','80','100'])}
+                {renderPointerWedge(305, 445, 55, tempMotorAngle, "#00a8ff")}
+              </g>
+
+              {/* 7. CONSUMP. (CENTER - OVERLAPS ESC & MOTOR) */}
+              <g filter="url(#shadow)">
+                <circle cx="190" cy="445" r="68" fill="url(#dialGrad)" stroke="#444" strokeWidth="2" />
+                <text x="190" y="412" fill="#aaa" fontSize="8" fontWeight="bold" textAnchor="middle">CONSUMP.</text>
+                <text x="190" y="445" fill="#ffffff" fontSize="26" fontWeight="bold" textAnchor="middle">{consumption}</text>
+                <text x="190" y="460" fill="#888" fontSize="8" fontWeight="bold" textAnchor="middle">WH/KM</text>
+                <text x="190" y="474" fill="#aaaaaa" fontSize="11" fontWeight="bold" textAnchor="middle">
+                  {avgConsumption} <tspan fill="#666" fontSize="8">AVG</tspan>
+                </text>
+                {renderTicks(190, 445, 58, 66, 48, 150, 390, ['-50','-25','0','25','50'])}
+                {renderPointerWedge(190, 445, 66, consumpAngle, "#00a8ff")}
+              </g>
+
+              {/* ==================== ODOMETER & TRIP METER ==================== */}
+              <g transform="translate(20, 520)">
+                {/* Header Labels */}
+                <text x="45" y="10" fill="#777" fontSize="8" fontWeight="bold" textAnchor="middle">ODOMETER</text>
+                <text x="170" y="10" fill="#777" fontSize="8" fontWeight="bold" textAnchor="middle">TRIP</text>
+                <text x="295" y="10" fill="#777" fontSize="8" fontWeight="bold" textAnchor="middle">UP-TIME</text>
+
+                {/* Digital Box Background */}
+                <rect x="0" y="16" width="340" height="26" rx="4" fill="#09090b" stroke="#222" strokeWidth="1" />
+
+                {/* Values */}
+                <text x="45" y="33" fill="#e0e0e0" fontSize="13" fontFamily="monospace" fontWeight="bold" textAnchor="middle">
+                  {odometer.toFixed(1)} <tspan fill="#777" fontSize="9">km</tspan>
+                </text>
+
+                <text x="170" y="33" fill="#e0e0e0" fontSize="13" fontFamily="monospace" fontWeight="bold" textAnchor="middle">
+                  {trip.toFixed(1)} <tspan fill="#777" fontSize="9">km</tspan>
+                </text>
+
+                <text x="295" y="33" fill="#00a8ff" fontSize="13" fontFamily="monospace" fontWeight="bold" textAnchor="middle">
+                  {formatUptime(uptimeSec)}
+                </text>
+              </g>
+
+              {/* ==================== BOTTOM STATUS BAR ==================== */}
+              <g transform="translate(10, 565)">
+                <circle cx="12" cy="5" r="8" fill="#222" stroke="#444" strokeWidth="1" />
+                <text x="12" y="8" fill="#888" fontSize="9" textAnchor="middle">⚙</text>
+
+                <text x="30" y="8" fill="#666" fontSize="10" fontWeight="bold">
+                  {gpsStatus === 'ACTIVE' ? 'CAN Connected (GPS)' : 'Not connected CAN'}
+                </text>
+
+                <text x="350" y="8" fill="#888" fontSize="12" fontWeight="bold" textAnchor="end">➔</text>
+              </g>
+
+            </svg>
+          </div>
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<VescDashboard />);
+  </script>
+</body>
 </html>
