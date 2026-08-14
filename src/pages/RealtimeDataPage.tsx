@@ -18,39 +18,41 @@ export const RealtimeDataPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#222222] text-white select-none overflow-hidden justify-between">
-      {/* Pasek Nawigacyjny Górny */}
-      <div className="flex justify-around items-center pt-3 pb-2 border-b border-[#333] text-sm font-extrabold text-gray-400">
+    <div className="flex flex-col h-[100dvh] bg-[#1a1a1a] text-white pt-[env(safe-area-inset-top,20px)] pb-[env(safe-area-inset-bottom,10px)] justify-between">
+      
+      {/* Pasek nawigacyjny górny VESC */}
+      <div className="flex justify-around items-center py-2 border-b border-[#2d2d2d] text-xs font-black tracking-wider text-gray-400">
         <button className="px-3 py-1">START</button>
         <button className="px-3 py-1 text-[#00A8FF] border-b-2 border-[#00A8FF]">RT DATA</button>
         <button className="px-3 py-1">PROFILES</button>
       </div>
 
-      {/* Wybór Trybu GPS / Symulacja */}
+      {/* Przełącznik GPS / Symulacja */}
       <div className="flex justify-end gap-2 px-4 pt-1">
         <button
           onClick={() => telemetry.enableGPS()}
-          className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-            data.isGpsActive ? 'bg-[#00A8FF] text-black border-[#00A8FF]' : 'bg-[#1A1A1A] text-gray-400 border-[#333]'
+          className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold border transition-all ${
+            data.isGpsActive ? 'bg-[#00A8FF] text-black border-[#00A8FF]' : 'bg-[#222] text-gray-400 border-[#333]'
           }`}
         >
           🛰️ GPS
         </button>
         <button
           onClick={() => telemetry.enableSimulation()}
-          className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-            !data.isGpsActive ? 'bg-[#00A8FF] text-black border-[#00A8FF]' : 'bg-[#1A1A1A] text-gray-400 border-[#333]'
+          className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold border transition-all ${
+            !data.isGpsActive ? 'bg-[#00A8FF] text-black border-[#00A8FF]' : 'bg-[#222] text-gray-400 border-[#333]'
           }`}
         >
           ⚡ SYMULACJA
         </button>
       </div>
 
-      {/* Główna Zawartość Zegarów */}
-      <div className="flex flex-col justify-around h-full px-2 py-1">
-        {/* Rząd Górny: CURRENT, POWER, DUTY */}
-        <div className="relative flex justify-center items-center h-[26%]">
-          <div className="w-[31%] z-0 -mr-3">
+      {/* Zegary analogowe */}
+      <div className="flex flex-col justify-evenly flex-1 px-2 my-auto">
+        
+        {/* Rząd 1: CURRENT, POWER, DUTY */}
+        <div className="relative flex justify-center items-center">
+          <div className="w-[31%] z-0 -mr-2">
             <AnalogGauge
               title="CURRENT"
               unit="A"
@@ -72,7 +74,7 @@ export const RealtimeDataPage: React.FC = () => {
               labels={['-10k', '-5k', '0', '5k', '10k']}
             />
           </div>
-          <div className="w-[31%] z-0 -ml-3">
+          <div className="w-[31%] z-0 -ml-2">
             <AnalogGauge
               title="DUTY"
               unit="%"
@@ -85,9 +87,9 @@ export const RealtimeDataPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Rząd Środkowy: SPEED + BATTERY */}
-        <div className="relative flex justify-center items-center h-[38%]">
-          <div className="w-[68%] max-w-[240px] z-0">
+        {/* Rząd 2: Główny SPEED + BATTERY */}
+        <div className="relative flex justify-center items-center my-1">
+          <div className="w-[70%] max-w-[250px]">
             <AnalogGauge
               title=""
               value={data.speed}
@@ -97,15 +99,21 @@ export const RealtimeDataPage: React.FC = () => {
               labels={['0', '10', '20', '30', '40', '50', '60']}
               centerOverride={
                 <div className="flex flex-col items-center pt-2">
-                  <span className="text-[10px] font-extrabold text-gray-400 tracking-widest">SPEED</span>
-                  <span className="text-5xl font-black text-white tracking-tight my-1">{data.speed}</span>
-                  <span className="text-[10px] font-extrabold text-gray-400 tracking-widest">KM/H</span>
+                  <span className="text-[10px] font-black text-gray-400 tracking-widest">SPEED</span>
+                  <span className="text-5xl font-black text-white tracking-tighter my-0.5">{data.speed}</span>
+                  <span className="text-[10px] font-black text-gray-400 tracking-widest">KM/H</span>
                 </div>
               }
             />
           </div>
 
-          <div className="absolute right-[8%] bottom-[5%] w-[38%] max-w-[130px] z-10">
+          {/* Logo VESC w tle */}
+          <div className="absolute top-2 right-6 opacity-20 text-xs font-black italic tracking-widest pointer-events-none">
+            \VESC®
+          </div>
+
+          {/* Nakładający się Zegar Baterii */}
+          <div className="absolute right-[5%] bottom-[2%] w-[40%] max-w-[135px] z-10">
             <AnalogGauge
               title="BATTERY"
               unit="%"
@@ -116,18 +124,18 @@ export const RealtimeDataPage: React.FC = () => {
               labels={['0', '25', '50', '75', '100']}
               centerOverride={
                 <div className="flex flex-col items-center pt-1">
-                  <span className="text-[8px] font-extrabold text-gray-400">BATTERY</span>
-                  <span className="text-xs font-bold text-white leading-tight">∞ KM RANGE</span>
-                  <span className="text-sm font-black text-white">{data.battery}%</span>
+                  <span className="text-[8px] font-black text-gray-400">BATTERY</span>
+                  <span className="text-[10px] font-bold text-white leading-tight">∞ KM RANGE</span>
+                  <span className="text-xs font-black text-white">{data.battery}%</span>
                 </div>
               }
             />
           </div>
         </div>
 
-        {/* Rząd Dolny: TEMP ESC, CONSUMP., TEMP MOTOR */}
-        <div className="relative flex justify-center items-center h-[26%]">
-          <div className="w-[31%] z-0 -mr-3">
+        {/* Rząd 3: TEMP ESC, CONSUMP., TEMP MOTOR */}
+        <div className="relative flex justify-center items-center">
+          <div className="w-[31%] z-0 -mr-2">
             <AnalogGauge
               title="TEMP ESC"
               unit="°C"
@@ -149,7 +157,7 @@ export const RealtimeDataPage: React.FC = () => {
               labels={['-50', '-25', '0', '25', '50']}
             />
           </div>
-          <div className="w-[31%] z-0 -ml-3">
+          <div className="w-[31%] z-0 -ml-2">
             <AnalogGauge
               title="TEMP MOTOR"
               unit="°C"
@@ -163,15 +171,15 @@ export const RealtimeDataPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Dolna Sekcja Cyfrowa ODOMETER / TRIP / UP-TIME */}
-      <div className="px-3 pb-2">
-        <div className="bg-[#181818] border border-[#333] rounded-md py-1 px-2">
-          <div className="grid grid-cols-3 text-center text-[9px] font-bold text-gray-400">
+      {/* Dolny Panel ODOMETER / TRIP / UP-TIME */}
+      <div className="px-3 py-1">
+        <div className="bg-[#141414] border border-[#2b2b2b] rounded-lg py-1.5 px-2">
+          <div className="grid grid-cols-3 text-center text-[9px] font-extrabold text-gray-400 tracking-wider">
             <span>ODOMETER</span>
             <span>TRIP</span>
             <span>UP-TIME</span>
           </div>
-          <div className="grid grid-cols-3 text-center font-mono font-bold text-base text-gray-200">
+          <div className="grid grid-cols-3 text-center font-mono font-black text-base text-gray-100 tracking-widest mt-0.5">
             <span>{data.odometer.toFixed(1)}</span>
             <span>{data.trip.toFixed(1)}</span>
             <span>{formatUptime(data.uptime)}</span>
@@ -179,9 +187,9 @@ export const RealtimeDataPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Dolny Pasek Statusu */}
-      <div className="flex justify-between items-center bg-[#1A1A1A] border-t border-[#2D2D2D] px-4 py-2 text-xs text-gray-400 font-bold">
-        <span>⚙️</span>
+      {/* Dolna belka systemowa */}
+      <div className="flex justify-between items-center bg-[#111111] border-t border-[#262626] px-5 py-2 text-xs font-extrabold text-gray-400">
+        <span className="text-gray-300">⚙️</span>
         <span className="text-gray-300">Not connected</span>
         <span className="text-xs">CAN ➔</span>
       </div>

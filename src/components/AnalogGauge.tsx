@@ -20,8 +20,8 @@ export const AnalogGauge: React.FC<GaugeProps> = ({
   value,
   min,
   max,
-  startAngle = 135,
-  endAngle = 405,
+  startAngle = 130,
+  endAngle = 410,
   needleColor = '#00A8FF',
   labels = [],
   className = '',
@@ -31,7 +31,7 @@ export const AnalogGauge: React.FC<GaugeProps> = ({
   const pct = (clampVal - min) / (max - min);
   const currentAngle = startAngle + pct * (endAngle - startAngle);
 
-  // Kreski podziałki
+  // Podziałki
   const totalTicks = 41;
   const ticks = [];
   for (let i = 0; i < totalTicks; i++) {
@@ -55,32 +55,32 @@ export const AnalogGauge: React.FC<GaugeProps> = ({
         y1={y1}
         x2={x2}
         y2={y2}
-        stroke={isMajor ? '#AAA' : '#555'}
+        stroke={isMajor ? '#999' : '#444'}
         strokeWidth={isMajor ? '1.2' : '0.6'}
       />
     );
   }
 
-  // Wartości liczbowe przy kreśkach
+  // Liczby na tarczy
   const labelElements = [];
   if (labels.length > 0) {
     for (let i = 0; i < labels.length; i++) {
       const lPct = i / (labels.length - 1);
       const angle = startAngle + lPct * (endAngle - startAngle);
       const rad = (angle * Math.PI) / 180;
-      const textR = 28;
+      const textR = 27;
 
       const lx = 50 + textR * Math.cos(rad);
-      const ly = 50 + textR * Math.sin(rad) + 1.5;
+      const ly = 50 + textR * Math.sin(rad) + 1.2;
 
       labelElements.push(
         <text
           key={i}
           x={lx}
           y={ly}
-          fill="#888"
-          fontSize="4.5"
-          fontWeight="bold"
+          fill="#777"
+          fontSize="4.2"
+          fontWeight="800"
           textAnchor="middle"
           dominantBaseline="middle"
         >
@@ -90,32 +90,30 @@ export const AnalogGauge: React.FC<GaugeProps> = ({
     }
   }
 
-  // Kąt wskazówki
-  const needleRad = (currentAngle * Math.PI) / 180;
-  const nx = 50 + 43 * Math.cos(needleRad);
-  const ny = 50 + 43 * Math.sin(needleRad);
-
   return (
-    <div className={`relative aspect-square rounded-full bg-[#1C1C1C] border border-[#333] shadow-lg select-none overflow-hidden ${className}`}>
+    <div className={`relative aspect-square rounded-full bg-[#181818] border border-[#2e2e2e] shadow-2xl overflow-hidden ${className}`}>
+      {/* Efekt szkła/refleks świetlny */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent rounded-full pointer-events-none" />
+
       <svg viewBox="0 0 100 100" className="w-full h-full">
-        <circle cx="50" cy="50" r="48" fill="#141414" stroke="#262626" strokeWidth="2" />
+        <circle cx="50" cy="50" r="48" fill="#121212" stroke="#222" strokeWidth="1.5" />
         {ticks}
         {labelElements}
 
-        {/* Trójkątny wskaźnik na brzegu (styl VESC) */}
+        {/* Trójkątny wskaźnik pozycji VESC */}
         <g transform={`rotate(${currentAngle}, 50, 50)`}>
-          <polygon points="50,6 47,13 53,13" fill={needleColor} />
+          <polygon points="50,5.5 46.5,12 53.5,12" fill={needleColor} />
         </g>
       </svg>
 
-      {/* Środek z wartością cyfrową */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none pt-1">
+      {/* Środek zegara */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none pt-0.5">
         {centerOverride ? (
           centerOverride
         ) : (
           <>
-            <span className="text-[8px] font-extrabold text-gray-400 tracking-wider uppercase">{title}</span>
-            <span className="text-lg font-black text-white leading-none my-0.5">{value}</span>
+            <span className="text-[8px] font-black text-gray-400 tracking-wider uppercase">{title}</span>
+            <span className="text-base font-black text-white leading-none my-0.5">{value}</span>
             {unit && <span className="text-[8px] font-bold text-gray-400 uppercase">{unit}</span>}
           </>
         )}
