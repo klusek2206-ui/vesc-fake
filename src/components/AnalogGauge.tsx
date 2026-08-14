@@ -1,194 +1,120 @@
 import React from 'react';
 
-interface AnalogGaugeProps {
+interface GaugeProps {
   title: string;
+  unit?: string;
   value: number;
-  unit: string;
   min: number;
   max: number;
-  majorTicks: number[];
-  subTicksCount?: number;
-  needleAngleStart?: number;
-  needleAngleEnd?: number;
+  startAngle: number;
+  endAngle: number;
   needleColor?: string;
-  secondaryText?: string;
-  secondarySubtext?: string;
-  showZeroMarker?: boolean;
-  zeroMarkerColor?: string;
-  size?: number;
+  subValue?: string;
+  subLabel?: string;
+  ticksCount?: number;
   className?: string;
+  centerTextOverride?: React.ReactNode;
 }
 
-export const AnalogGauge: React.FC<AnalogGaugeProps> = ({
+export const AnalogGauge: React.FC<GaugeProps> = ({
   title,
+  unit = '',
   value,
-  unit,
   min,
   max,
-  majorTicks,
-  subTicksCount = 4,
-  needleAngleStart = 135,
-  needleAngleEnd = 405,
-  needleColor = '#00a3ff',
-  secondaryText,
-  secondarySubtext,
-  showZeroMarker = false,
-  zeroMarkerColor = '#e2b000',
-  size = 200,
-  className = ''
+  startAngle,
+  endAngle,
+  needleColor = '#00A8FF',
+  subValue,
+  subLabel,
+  ticksCount = 11,
+  className = '',
+  centerTextOverride
 }) => {
-  const center = 100;
-  const radius = 82;
-  const innerRadius = 72;
+  const clampVal = Math.min(Math.max(value, min), max);
+  const pct = (clampVal - min) / (max - min);
+  const currentAngle = startAngle + pct * (endAngle - startAngle);
 
-  const clampedVal = Math.min(Math.max(value, min), max);
-  const valRatio = (clampedVal - min) / (max - min);
-  const needleAngle = needleAngleStart + valRatio * (needleAngleEnd - needleAngleStart);
-
-  const ticks: React.ReactNode[] = [];
-  const totalMajor = majorTicks.length;
-
-  majorTicks.forEach((tickVal, index) => {
-    const tickRatio = (tickVal - min) / (max - min);
-    const angle = needleAngleStart + tickRatio * (needleAngleEnd - needleAngleStart);
+  // Generowanie podziałek
+  const ticks = [];
+  for (let i = 0; i < ticksCount; i++) {
+    const tickPct = i / (ticksCount - 1);
+    const angle = startAngle + tickPct * (endAngle - startAngle);
     const rad = (angle * Math.PI) / 180;
+    
+    const isMajor = i % 2 === 0;
+    const innerR = isMajor ? 38 : 42;
+    const outerR = 46;
 
-    const x1 = center + radius * Math.cos(rad);
-    const y1 = center + radius * Math.sin(rad);
-    const x2 = center + innerRadius * Math.cos(rad);
-    const y2 = center + innerRadius * Math.sin(rad);
-
-    const labelRadius = innerRadius - 11;
-    const lx = center + labelRadius * Math.cos(rad);
-    const ly = center + labelRadius * Math.sin(rad);
+    const x1 = 50 + innerR * Math.cos(rad);
+    const y1 = 50 + innerR * Math.sin(rad);
+    const x2 = 50 + outerR * Math.cos(rad);
+    const y2 = 50 + outerR * Math.sin(rad);
 
     ticks.push(
       <line
-        key={`major-${index}`}
+        key={i}
         x1={x1}
         y1={y1}
         x2={x2}
         y2={y2}
-        stroke="#8e8e93"
-        strokeWidth="1.6"
+        stroke="#888"
+        strokeWidth={isMajor ? 1.2 : 0.6}
       />
     );
+  }
 
-    ticks.push(
-      <text
-        key={`label-${index}`}
-        x={lx}
-        y={ly}
-        fill="#a2a2a8"
-        fontSize="8.5"
-        fontWeight="500"
-        textAnchor="middle"
-        dominantBaseline="central"
-      >
-        {tickVal}
-      </text>
-    );
-
-    if (index < totalMajor - 1) {
-      const nextVal = majorTicks[index + 1];
-      const step = (nextVal - tickVal) / (subTicksCount + 1);
-      for (let j = 1; j <= subTicksCount; j++) {
-        const subVal = tickVal + step * j;
-        const subRatio = (subVal - min) / (max - min);
-        const subAngle = needleAngleStart + subRatio * (needleAngleEnd - needleAngleStart);
-        const subRad = (subAngle * Math.PI) / 180;
-
-        const sx1 = center + radius * Math.cos(subRad);
-        const sy1 = center + radius * Math.sin(subRad);
-        const sx2 = center + (radius - 5) * Math.cos(subRad);
-        const sy2 = center + (radius - 5) * Math.sin(subRad);
-
-        ticks.push(
-          <line
-            key={`sub-${index}-${j}`}
-            x1={sx1}
-            y1={sy1}
-            x2={sx2}
-            y2={sy2}
-            stroke="#48484a"
-            strokeWidth="0.9"
-          />
-        );
-      }
-    }
-  });
-
-  const needleRad = (needleAngle * Math.PI) / 180;
-  const needleLen = innerRadius - 6;
-  const nx = center + needleLen * Math.cos(needleRad);
-  const ny = center + needleLen * Math.sin(needleRad);
+  // Wyliczenie pozycji wskazówki
+  const needleRad = (currentAngle * Math.PI) / 180;
+  const needleX = 50 + 44 * Math.cos(needleRad);
+  const needleY = 50 + 44 * Math.sin(needleRad);
 
   return (
-    <div className={`relative flex items-center justify-center select-none ${className}`} style={{ width: size, height: size }}>
-      <svg viewBox="0 0 200 200" className="w-full h-full drop-shadow-lg">
-        <defs>
-          <radialGradient id={`bgGlow-${title}`} cx="50%" cy="50%" r="50%">
-            <stop offset="70%" stopColor="#1a1b1e" />
-            <stop offset="100%" stopColor="#121315" />
-          </radialGradient>
-          <linearGradient id="glassGloss" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.08" />
-            <stop offset="50%" stopColor="#ffffff" stopOpacity="0.01" />
-            <stop offset="100%" stopColor="#000000" stopOpacity="0.3" />
-          </linearGradient>
-        </defs>
+    <div className={`relative aspect-square rounded-full bg-[#161616] border border-[#2A2A2A] shadow-2xl overflow-hidden select-none ${className}`}>
+      {/* Metaliczna ramka i refleks światła */}
+      <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+      
+      <svg viewBox="0 0 100 100" className="w-full h-full">
+        {/* Tarcza zegara */}
+        <circle cx="50" cy="50" r="48" fill="#141414" stroke="#222" strokeWidth="2" />
+        <circle cx="50" cy="50" r="46" fill="none" stroke="#2D2D2D" strokeWidth="0.5" />
 
-        <circle cx={center} cy={center} r="96" fill={`url(#bgGlow-${title})`} stroke="#2c2c2e" strokeWidth="2.5" />
-        <circle cx={center} cy={center} r="94" fill="none" stroke="#161719" strokeWidth="1" />
-
+        {/* Podziałki */}
         {ticks}
 
-        {showZeroMarker && (
-          <path
-            d={`M ${center - radius} ${center} L ${center - innerRadius + 4} ${center}`}
-            stroke={zeroMarkerColor}
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-        )}
-
-        <text x={center} y={center - 22} fill="#8e8e93" fontSize="8" fontWeight="600" textAnchor="middle" letterSpacing="0.5">
-          {title}
-        </text>
-        <text x={center} y={center + 2} fill="#ffffff" fontSize="22" fontWeight="700" textAnchor="middle">
-          {value}
-        </text>
-        <text x={center} y={center + 18} fill="#8e8e93" fontSize="8" fontWeight="500" textAnchor="middle">
-          {unit}
-        </text>
-
-        {secondaryText && (
-          <text x={center} y={center + 30} fill="#8e8e93" fontSize="7" fontWeight="400" textAnchor="middle">
-            {secondaryText}
-          </text>
-        )}
-        {secondarySubtext && (
-          <text x={center} y={center + 38} fill="#8e8e93" fontSize="7" fontWeight="400" textAnchor="middle">
-            {secondarySubtext}
-          </text>
-        )}
-
-        <g style={{ transition: 'transform 0.15s ease-out' }}>
-          <line
-            x1={center}
-            y1={center}
-            x2={nx}
-            y2={ny}
-            stroke={needleColor}
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            className="drop-shadow-[0_0_6px_rgba(0,163,255,0.8)]"
-          />
-          <circle cx={center} cy={center} r="4" fill="#ffffff" stroke={needleColor} strokeWidth="1.5" />
-        </g>
-
-        <circle cx={center} cy={center} r="94" fill="url(#glassGloss)" pointerEvents="none" />
+        {/* Wskazówka */}
+        <line
+          x1="50"
+          y1="50"
+          x2={needleX}
+          y2={needleY}
+          stroke={needleColor}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        />
+        
+        {/* Środek wskazówki */}
+        <circle cx="50" cy="50" r="3" fill="#000" stroke={needleColor} strokeWidth="1.5" />
       </svg>
+
+      {/* Tekst na środku tarczy */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center pt-2">
+        {centerTextOverride ? (
+          centerTextOverride
+        ) : (
+          <>
+            <span className="text-[9px] tracking-wider text-gray-400 font-bold uppercase">{title}</span>
+            <span className="text-xl font-extrabold text-white leading-none my-0.5">{value}</span>
+            {unit && <span className="text-[9px] text-gray-400 font-bold uppercase">{unit}</span>}
+            {subValue && (
+              <div className="mt-1 flex flex-col items-center">
+                <span className="text-xs font-bold text-white">{subValue}</span>
+                {subLabel && <span className="text-[7px] text-gray-400 uppercase">{subLabel}</span>}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };

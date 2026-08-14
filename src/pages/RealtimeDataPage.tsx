@@ -1,180 +1,190 @@
-import React from 'react';
-import { TelemetryData } from '../types/vesc';
+import React, { useEffect, useState } from 'react';
+import { telemetry, TelemetryData } from '../services/GPSService';
 import { AnalogGauge } from '../components/AnalogGauge';
-import { formatTime } from '../utils/formatters';
-import { Settings as SettingsIcon } from 'lucide-react';
 
-interface RealtimeDataPageProps {
-  data: TelemetryData;
-  onOpenSettings: () => void;
-}
+export const RealtimeDataPage: React.FC = () => {
+  const [data, setData] = useState<TelemetryData>({
+    speed: 0,
+    current: 0,
+    power: 0,
+    duty: 0,
+    battery: 98,
+    tempEsc: 32,
+    tempMotor: 35,
+    consumption: 0,
+    odometer: 0,
+    trip: 0,
+    uptime: 0,
+    isGpsActive: false,
+  });
 
-export const RealtimeDataPage: React.FC<RealtimeDataPageProps> = ({ data, onOpenSettings }) => {
+  useEffect(() => {
+    const unsubscribe = telemetry.subscribe(setData);
+    return () => unsubscribe();
+  }, []);
+
+  const formatUptime = (sec: number) => {
+    const hrs = Math.floor(sec / 3600).toString().padStart(2, '0');
+    const mins = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
+    const secs = (sec % 60).toString().padStart(2, '0');
+    return `${hrs}:${mins}:${secs}`;
+  };
+
   return (
-    <div className="flex-1 flex flex-col justify-between items-center px-2 py-1 select-none overflow-hidden bg-[#121315]">
-      
-      {/* GÓRNY RZĄD: CURRENT | POWER | DUTY */}
-      <div className="w-full flex justify-between items-center gap-1 max-w-sm mt-1">
+    <div className="flex flex-col h-full bg-[#121212] text-white overflow-hidden p-2 justify-between">
+      {/* Przełącznik źródła prędkości */}
+      <div className="flex justify-between items-center px-2 py-1 bg-[#1E1E1E] rounded-md border border-[#2C2C2C] text-xs">
+        <span className="text-gray-400 font-medium">Źródło prędkości:</span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => telemetry.enableGPS()}
+            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+              data.isGpsActive ? 'bg-[#00A8FF] text-black' : 'bg-[#2A2A2A] text-gray-400'
+            }`}
+          >
+            🛰️ GPS
+          </button>
+          <button
+            onClick={() => telemetry.enableSimulation()}
+            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+              !data.isGpsActive ? 'bg-[#00A8FF] text-black' : 'bg-[#2A2A2A] text-gray-400'
+            }`}
+          >
+            ⚡ Symulacja
+          </button>
+        </div>
+      </div>
+
+      {/* Górny Rząd 3 Zegarów (CURRENT, POWER, DUTY) */}
+      <div className="grid grid-cols-3 gap-1 items-center px-1">
         <AnalogGauge
           title="CURRENT"
           value={data.current}
           unit="A"
           min={-60}
           max={60}
-          majorTicks={[-60, -40, -20, 0, 20, 40, 60]}
-          subTicksCount={1}
-          needleAngleStart={135}
-          needleAngleEnd={405}
-          showZeroMarker={true}
-          size={112}
+          startAngle={130}
+          endAngle={370}
+          needleColor="#FFE600"
         />
-
         <AnalogGauge
           title="POWER"
           value={data.power}
           unit="W"
           min={-10000}
           max={10000}
-          majorTicks={[-10, -5, 0, 5, 10]}
-          needleAngleStart={135}
-          needleAngleEnd={405}
-          needleColor="#00a3ff"
-          size={120}
+          startAngle={130}
+          endAngle={410}
+          needleColor="#00A8FF"
+          className="scale-110 z-10"
         />
-
         <AnalogGauge
           title="DUTY"
           value={data.duty}
           unit="%"
           min={-100}
           max={100}
-          majorTicks={[-100, -50, 0, 50, 100]}
-          needleAngleStart={135}
-          needleAngleEnd={405}
-          needleColor="#8a2be2"
-          size={112}
+          startAngle={130}
+          endAngle={370}
+          needleColor="#B800FF"
         />
       </div>
 
-      {/* ŚRODKOWA SEKCJA: SPEEDOMETER + BATTERY */}
-      <div className="relative w-full max-w-sm flex justify-center items-center my-1">
-        <div className="relative flex items-center justify-center">
+      {/* Środkowa Sekcja: Główny SPEED + Bateria */}
+      <div className="relative my-auto flex items-center justify-center">
+        {/* Duży Zegar Prędkości */}
+        <div className="w-[72%] max-w-[280px]">
           <AnalogGauge
-            title="SPEED"
-            value={data.displaySpeed}
-            unit="KM/H"
+            title=""
+            value={data.speed}
             min={0}
             max={60}
-            majorTicks={[0, 10, 20, 30, 40, 50, 60]}
-            subTicksCount={4}
-            needleAngleStart={135}
-            needleAngleEnd={385}
-            needleColor="#00a3ff"
-            size={220}
+            startAngle={130}
+            endAngle={410}
+            needleColor="#00A8FF"
+            ticksCount={13}
+            centerTextOverride={
+              <div className="flex flex-col items-center justify-center pt-2">
+                <span className="text-[10px] tracking-widest text-gray-400 font-extrabold">SPEED</span>
+                <span className="text-5xl font-black text-white tracking-tighter my-1">{data.speed}</span>
+                <span className="text-[10px] tracking-widest text-gray-400 font-extrabold">KM/H</span>
+              </div>
+            }
           />
-
-          <div className="absolute top-10 right-10 opacity-40 pointer-events-none">
-            <span className="text-white font-black italic tracking-tighter text-xs">|||VESC®</span>
-          </div>
-
-          <button
-            onClick={onOpenSettings}
-            className="absolute bottom-5 left-4 p-2 bg-[#222327] border border-[#3a3b40] rounded-full text-[#a2a2a8] hover:text-white shadow-md active:scale-95"
-          >
-            <SettingsIcon className="w-4 h-4" />
-          </button>
         </div>
 
-        <div className="absolute right-[-6px] top-[18px]">
+        {/* Logo VESC w tle */}
+        <div className="absolute top-2 right-6 opacity-30 text-xs font-black tracking-widest italic pointer-events-none">
+          \VESC®
+        </div>
+
+        {/* Zegar Baterii (Zachodzący po prawej stronie) */}
+        <div className="absolute right-1 bottom-4 w-[42%] max-w-[160px] z-20">
           <AnalogGauge
             title="BATTERY"
-            value={data.batteryPercent}
+            value={data.battery}
             unit="%"
+            subValue="∞"
+            subLabel="KM RANGE"
             min={0}
             max={100}
-            majorTicks={[0, 20, 40, 60, 80, 100]}
-            subTicksCount={1}
-            needleAngleStart={135}
-            needleAngleEnd={385}
-            needleColor="#ff3b30"
-            secondaryText={`${data.batteryRangeKm} KM RANGE`}
-            size={135}
+            startAngle={130}
+            endAngle={370}
+            needleColor="#FF2A2A"
           />
         </div>
       </div>
 
-      {/* DOLNY RZĄD: TEMP ESC | CONSUMPT. | TEMP MOTOR */}
-      <div className="w-full flex justify-between items-center gap-1 max-w-sm my-1">
+      {/* Dolny Rząd 3 Zegarów (TEMP ESC, CONSUMP, TEMP MOTOR) */}
+      <div className="grid grid-cols-3 gap-1 items-center px-1">
         <AnalogGauge
           title="TEMP ESC"
           value={data.tempEsc}
           unit="°C"
           min={0}
           max={100}
-          majorTicks={[0, 20, 40, 60, 80, 100]}
-          needleAngleStart={135}
-          needleAngleEnd={385}
-          needleColor="#00a3ff"
-          size={110}
+          startAngle={130}
+          endAngle={370}
+          needleColor="#00A8FF"
         />
-
         <AnalogGauge
-          title="CONSUMPT."
+          title="CONSUMP."
           value={data.consumption}
           unit="WH/KM"
+          subValue="0"
+          subLabel="AVG"
           min={-50}
           max={50}
-          majorTicks={[-50, -25, 0, 25, 50]}
-          needleAngleStart={135}
-          needleAngleEnd={405}
-          needleColor="#00a3ff"
-          secondaryText={`${data.consumptionAvg}`}
-          secondarySubtext="AVG"
-          size={118}
+          startAngle={130}
+          endAngle={410}
+          needleColor="#00A8FF"
+          className="scale-110 z-10"
         />
-
         <AnalogGauge
           title="TEMP MOTOR"
           value={data.tempMotor}
           unit="°C"
           min={0}
           max={100}
-          majorTicks={[0, 20, 40, 60, 80, 100]}
-          needleAngleStart={135}
-          needleAngleEnd={385}
-          needleColor="#00a3ff"
-          size={110}
+          startAngle={130}
+          endAngle={370}
+          needleColor="#00A8FF"
         />
       </div>
 
-      {/* STATYSTYKI NA DOLE */}
-      <div className="w-full max-w-sm bg-[#16171a] border border-[#26272b] rounded-xl px-4 py-2 flex justify-between items-center text-center shadow-inner mb-1">
-        <div>
-          <div className="text-[9px] font-bold text-[#7c7c80] tracking-wider uppercase">ODOMETER</div>
-          <div className="text-sm font-mono font-bold text-white tracking-widest mt-0.5">
-            {data.odometer.toFixed(1)}
-          </div>
+      {/* Dolny Panel Cyfrowy (ODOMETER, TRIP, UP-TIME) */}
+      <div className="bg-[#181818] border border-[#282828] rounded-lg p-2 mt-2">
+        <div className="grid grid-cols-3 text-center mb-1">
+          <span className="text-[9px] font-bold text-gray-400 uppercase">ODOMETER</span>
+          <span className="text-[9px] font-bold text-gray-400 uppercase">TRIP</span>
+          <span className="text-[9px] font-bold text-gray-400 uppercase">UP-TIME</span>
         </div>
-
-        <div className="h-6 w-[1px] bg-[#2a2b30]" />
-
-        <div>
-          <div className="text-[9px] font-bold text-[#7c7c80] tracking-wider uppercase">TRIP</div>
-          <div className="text-sm font-mono font-bold text-white tracking-widest mt-0.5">
-            {data.trip.toFixed(1)}
-          </div>
-        </div>
-
-        <div className="h-6 w-[1px] bg-[#2a2b30]" />
-
-        <div>
-          <div className="text-[9px] font-bold text-[#7c7c80] tracking-wider uppercase">UP-TIME</div>
-          <div className="text-sm font-mono font-bold text-white tracking-widest mt-0.5">
-            {formatTime(data.uptimeSeconds)}
-          </div>
+        <div className="grid grid-cols-3 text-center font-mono font-bold text-lg text-gray-200 tracking-wider">
+          <div>{data.odometer.toFixed(1)}</div>
+          <div>{data.trip.toFixed(1)}</div>
+          <div>{formatUptime(data.uptime)}</div>
         </div>
       </div>
-
     </div>
   );
 };
