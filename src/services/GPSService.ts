@@ -18,28 +18,28 @@ type Callback = (data: TelemetryData) => void;
 export class GPSServiceClass {
   private callbacks: Callback[] = [];
   private watchId: number | null = null;
-  private isSimulation = true;
+  private isSimulation = false; // Domyślnie tryb rzeczywisty / 0 gdy stoi
 
   private lastLat: number | null = null;
   private lastLon: number | null = null;
   private lastTime: number | null = null;
 
-  private currentSpeed = 0;
-  private currentAmps = 0;
-  private currentPower = 0;
-  private currentDuty = 0;
-  private batteryPct = 98;
-  private tempEsc = 31;
-  private tempMotor = 34;
+  // Wartości fizyczne
+  private speed = 0;
+  private current = 0;
+  private power = 0;
+  private duty = 0;
+  private battery = 0;
+  private tempEsc = 0;
+  private tempMotor = 0;
   private consumption = 0;
-  private odometer = 14.2;
-  private trip = 3.5;
+  private odometer = 0.0;
+  private trip = 0.0;
   private startTime = Date.now();
-  private simTargetSpeed = 0;
-  private lastSpeed = 0;
 
   constructor() {
     this.startLoop();
+    this.enableGPS();
   }
 
   public subscribe(cb: Callback) {
@@ -60,18 +60,27 @@ export class GPSServiceClass {
             rawSpeedKmH = pos.coords.speed * 3.6;
           } else if (this.lastLat !== null && this.lastLon !== null && this.lastTime !== null) {
             const dt = (pos.timestamp - this.lastTime) / 1000;
-            if (dt > 0.5) {
+            if (dt > 0.4) {
               const dist = this.calculateDistance(this.lastLat, this.lastLon, pos.coords.latitude, pos.coords.longitude);
               rawSpeedKmH = (dist / dt) * 3.6;
             }
           }
+
           this.lastLat = pos.coords.latitude;
           this.lastLon = pos.coords.longitude;
           this.lastTime = pos.timestamp;
-          this.currentSpeed = Math.max(0, rawSpeedKmH);
+
+          // FILTR MARTWEJ STREFY (Eliminuje skakanie gdy telefon leży w miejscu)
+          if (rawSpeedKmH < 2.5) {
+            rawSpeedKmH = 0;
+          }
+
+          // Płynne filtrowanie wartości (EMA)
+          this.speed += (rawSpeedKmH - this.speed) * 0.3;
+          if (this.speed < 0.4) this.speed = 0;
         },
         (err) => console.warn("GPS Warning:", err),
-        { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+        { enableHighAccuracy: true, maximumAge: 500, timeout: 3000 }
       );
     }
   }
@@ -102,47 +111,29 @@ export class GPSServiceClass {
 
   private updatePhysics() {
     if (this.isSimulation) {
-      if (Math.random() < 0.04) {
-        this.simTargetSpeed = Math.random() > 0.15 ? Math.floor(Math.random() * 58) : 0;
+      if (Math.random() < 0.03) {
+        const target = Math.random() > 0.2 ? Math.floor(Math.random() * 45) : 0;
+        this.speed += (target - this.speed) * 0.1;
       }
-      const speedDiff = this.simTargetSpeed - this.currentSpeed;
-      this.currentSpeed += speedDiff * 0.07;
     }
 
-    const speed = Math.max(0, this.currentSpeed);
-    const accel = (speed - this.lastSpeed) / 0.1;
-    this.lastSpeed = speed;
-
-    let targetAmps = 0;
-    if (accel > 0.4) {
-      targetAmps = Math.min(58, 10 + accel * 7.5 + speed * 0.35);
-    } else if (accel < -0.7) {
-      targetAmps = Math.max(-30, accel * 4.5);
-    } else if (speed > 1.5) {
-      targetAmps = 3.5 + speed * 0.22;
-    }
-
-    this.currentAmps += (targetAmps - this.currentAmps) * 0.15;
-    const voltage = 50.4 * (this.batteryPct / 100);
-    this.currentPower = this.currentAmps * voltage;
-    const targetDuty = (speed / 60) * 90;
-    this.currentDuty += (targetDuty - this.currentDuty) * 0.2;
-
-    if (speed > 1) {
-      const wh = (this.currentPower / speed);
-      this.consumption += (wh - this.consumption) * 0.1;
+    // Gdy urządzenie stoi w miejscu, wyzeruj wartości wyliczane
+    if (this.speed === 0) {
+      this.current += (0 - this.current) * 0.2;
+      this.power += (0 - this.power) * 0.2;
+      this.duty += (0 - this.duty) * 0.2;
+      this.consumption += (0 - this.consumption) * 0.2;
     } else {
-      this.consumption *= 0.88;
+      const targetAmps = Math.min(60, this.speed * 0.8 + Math.random() * 2);
+      this.current += (targetAmps - this.current) * 0.2;
+      this.power = this.current * 48;
+      this.duty = Math.min(100, (this.speed / 60) * 100);
+      this.consumption = 15 + Math.random() * 3;
+
+      const distDelta = (this.speed / 3600) * 0.1;
+      this.odometer += distDelta;
+      this.trip += distDelta;
     }
-
-    const heat = Math.pow(Math.abs(this.currentAmps) / 50, 2);
-    this.tempEsc += heat * 0.02 - (this.tempEsc - 28) * 0.002;
-    this.tempMotor += heat * 0.035 - (this.tempMotor - 28) * 0.001;
-
-    const distDelta = (speed / 3600) * 0.1;
-    this.odometer += distDelta;
-    this.trip += distDelta;
-    this.batteryPct = Math.max(0, this.batteryPct - distDelta * 0.012);
 
     const data = this.getSnapshot();
     this.callbacks.forEach(cb => cb(data));
@@ -150,11 +141,11 @@ export class GPSServiceClass {
 
   public getSnapshot(): TelemetryData {
     return {
-      speed: Math.round(this.currentSpeed),
-      current: Math.round(this.currentAmps),
-      power: Math.round(this.currentPower),
-      duty: Math.round(this.currentDuty),
-      battery: Math.round(this.batteryPct),
+      speed: Math.round(this.speed),
+      current: Math.round(this.current),
+      power: Math.round(this.power),
+      duty: Math.round(this.duty),
+      battery: Math.round(this.battery),
       tempEsc: Math.round(this.tempEsc),
       tempMotor: Math.round(this.tempMotor),
       consumption: Math.round(this.consumption),
@@ -166,7 +157,6 @@ export class GPSServiceClass {
   }
 }
 
-// Eksportujemy zarówno nazwę GPSService, jak i domyślny eksport, zapobiegając błędom importu w innych plikach
 export const GPSService = new GPSServiceClass();
 export const telemetry = GPSService;
 export default GPSService;
